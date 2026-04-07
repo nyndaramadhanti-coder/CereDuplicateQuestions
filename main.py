@@ -220,22 +220,75 @@ with tabs[0]:
 
 # ══════════════ TAB 2: ANALISIS BANK SOAL ══════════════
 with tabs[1]:
-    st.markdown('<div class="sec">Top Bank Soal Dengan Duplikat Terbanyak</div>', unsafe_allow_html=True)
     top_bank = fbank.sort_values('dup_count', ascending=False).head(top_n).copy()
-    top_bank['bid_str'] = top_bank['bank_question_id'].astype(str)
-    fig_tb = px.bar(top_bank.sort_values('dup_count'), x='dup_count', y='bid_str',
-        orientation='h', color='severity', color_discrete_map=SEV_COLOR, text='dup_count',
-        hover_data={'platforms_str':True,'n_categories':True,'n_platforms':True,'bid_str':False})
-    fig_tb.update_traces(texttemplate='%{text}x', textposition='outside', marker_line_width=0)
-    fig_tb.update_layout(**PLOT_THEME, margin=dict(t=20,b=20,l=80,r=60), height=max(350,top_n*30),
-        legend=dict(bgcolor='rgba(0,0,0,0)', title='Severity'),
-        xaxis=dict(showgrid=True,gridcolor='#161d40',color='#3a4568',title='Jumlah Kemunculan'),
-        yaxis=dict(showgrid=False,color='#9aa5c4',title='Bank Question ID',
-                   tickfont=dict(family='IBM Plex Mono',size=10)))
-    st.plotly_chart(fig_tb, use_container_width=True)
+    top_bank['bid_str'] = 'ID ' + top_bank['bank_question_id'].astype(str)
+
+    # ── Pie chart + tabel berdampingan ──
+    pc1, pc2 = st.columns([1, 2])
+
+    with pc1:
+        st.markdown(f'<div class="sec">Proporsi Top {top_n} Bank Soal (Jumlah Duplikat)</div>', unsafe_allow_html=True)
+        fig_pie = px.pie(
+            top_bank, names='bid_str', values='dup_count',
+            color='severity', color_discrete_map=SEV_COLOR,
+            hole=0.45,
+        )
+        fig_pie.update_traces(
+            textinfo='label+value',
+            texttemplate='%{label}<br><b>%{value}x</b>',
+            textfont=dict(size=11, family='IBM Plex Mono'),
+            marker=dict(line=dict(color='#080b18', width=2)),
+            pull=[0.05 if i == 0 else 0 for i in range(len(top_bank))],
+        )
+        fig_pie.update_layout(
+            **PLOT_THEME, height=460,
+            margin=dict(t=20, b=10, l=10, r=10),
+            legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#8891b8', size=10),
+                        orientation='v', x=1.01, y=0.5),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    with pc2:
+        st.markdown(f'<div class="sec">Tabel Ringkas Top {top_n} Bank Soal — Platform, Kategori & ID Soal</div>', unsafe_allow_html=True)
+        # Build a clean display table
+        rows_tbl = []
+        for _, row in top_bank.iterrows():
+            plats   = ' · '.join(row['platforms'])
+            cats    = row['categories']
+            cat_str = ', '.join(cats[:4]) + (f' (+{len(cats)-4} lainnya)' if len(cats) > 4 else '')
+            qids    = row['question_ids']
+            qid_str = ', '.join(str(int(q)) for q in qids[:6]) + (f' (+{len(qids)-6} lagi)' if len(qids) > 6 else '')
+            rows_tbl.append({
+                'Bank ID':         int(row['bank_question_id']),
+                'Duplikat':        f"{int(row['dup_count'])}x",
+                'Severity':        row['severity'],
+                'Platform':        plats,
+                'Jml Kategori':    int(row['n_categories']),
+                'Kategori':        cat_str,
+                'ID Soal':         qid_str,
+            })
+        tbl_df = pd.DataFrame(rows_tbl)
+        st.dataframe(
+            tbl_df,
+            use_container_width=True,
+            height=460,
+            column_config={
+                'Bank ID':      st.column_config.NumberColumn('Bank ID', format='%d'),
+                'Duplikat':     st.column_config.TextColumn('Duplikat'),
+                'Severity':     st.column_config.TextColumn('Severity'),
+                'Platform':     st.column_config.TextColumn('Platform'),
+                'Jml Kategori': st.column_config.NumberColumn('# Kategori', format='%d'),
+                'Kategori':     st.column_config.TextColumn('Kategori (sample)', width='large'),
+                'ID Soal':      st.column_config.TextColumn('ID Soal (sample)', width='large'),
+            }
+        )
+
+    # ── Tabel detail lengkap dengan expander per bank ID ──
+    st.markdown('<div class="sec" style="margin-top:1rem;">Detail Lengkap Per Bank Soal — Platform, Semua Kategori & Semua ID Soal</div>', unsafe_allow_html=True)
 
     # Detail cards
-    st.markdown('<div class="sec">Kartu Detail — Top 10 Bank Soal Terduplikat</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec" style="margin-top:.5rem;">Kartu Detail — Top 10 Bank Soal Terduplikat</div>', unsafe_allow_html=True)
     for _, row in fbank.sort_values('dup_count', ascending=False).head(10).iterrows():
         sc = SEV_COLOR.get(row['severity'],'#6366f1')
         cats  = row['categories'][:5]
